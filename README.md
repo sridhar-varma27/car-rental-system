@@ -464,5 +464,9 @@ No license has been specified yet. All rights are reserved unless a license is a
 ### Manage Cars
 ![Manage Cars](screenshots/ManageCars-page.png)
 
+### Manage Bookings
+![Manage Bookings](screenshots/ManageBookings.png)
+
+
 ### Payment
 ![Payment Page](screenshots/Payment.png)
