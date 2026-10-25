@@ -366,7 +366,7 @@ Important application workflows to verify include:
 
 ## 👨‍💻 Author
 
-**Sridhar Varma**
+**Gollapothu Sridhar**
 
 GitHub: [@sridhar-varma27](https://github.com/sridhar-varma27)
 
