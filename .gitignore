@@ -1,0 +1,35 @@
+# Environment variables and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.sample
+
+# Java / Maven
+**/target/
+*.class
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+**/build/
+
+# Logs and IDE files
+*.log
+.idea/
+*.iml
+.vscode/
+
+# Local database backups and dumps
+*.backup
+*.dump
+*.sql
+
+# Local credentials and test data
+admin-login.json
+login.json
+
+# Local operating-system files
+.DS_Store
+Thumbs.db

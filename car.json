@@ -1,0 +1,10 @@
+{
+    "brand": "Toyota",
+    "model": "Camry",
+    "category": "Sedan",
+    "pricePerDay": 2500,
+    "fuelType": "Petrol",
+    "transmission": "Automatic",
+    "seatingCapacity": 5,
+    "imageUrl": "https://example.com/toyota-camry.jpg"
+}
