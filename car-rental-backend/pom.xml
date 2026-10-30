@@ -119,6 +119,12 @@
             <version>1.4.10</version>
         </dependency>
 
+        <!-- Spring Boot Mail - Gmail SMTP -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

@@ -39,6 +39,9 @@ public class Payment {
     @Column(name = "razorpay_payment_id", unique = true)
     private String razorpayPaymentId;
 
+    @Column(name = "razorpay_refund_id", unique = true)
+    private String razorpayRefundId;
+
     public Payment() {
     }
 
@@ -122,5 +125,13 @@ public class Payment {
 
     public void setRazorpayPaymentId(String razorpayPaymentId) {
         this.razorpayPaymentId = razorpayPaymentId;
+    }
+
+    public String getRazorpayRefundId() {
+        return razorpayRefundId;
+    }
+
+    public void setRazorpayRefundId(String razorpayRefundId) {
+        this.razorpayRefundId = razorpayRefundId;
     }
 }

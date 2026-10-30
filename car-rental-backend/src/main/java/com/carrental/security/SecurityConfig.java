@@ -1,3 +1,4 @@
+
 package com.carrental.security;
 
 import java.util.List;
@@ -40,6 +41,7 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
+
         DaoAuthenticationProvider provider =
                 new DaoAuthenticationProvider(userDetailsService);
 
@@ -57,6 +59,7 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(
@@ -114,6 +117,7 @@ public class SecurityConfig {
                 .requestMatchers(
                         "/api/auth/register",
                         "/api/auth/login",
+                        "/api/webhooks/razorpay",
                         "/error"
                 ).permitAll()
 

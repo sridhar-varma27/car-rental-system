@@ -10,12 +10,17 @@ import com.carrental.entity.User;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -23,21 +28,33 @@ import java.util.TreeMap;
 @Service
 public class BookingService {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(BookingService.class);
+
     private static final List<BookingStatus> ACTIVE_STATUSES =
             List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
 
     private final BookingRepository bookingRepository;
     private final CarRepository carRepository;
     private final UserRepository userRepository;
+    private final PaymentService paymentService;
+    private final EmailService emailService;
+    private final EmailTemplateService emailTemplateService;
 
     public BookingService(
             BookingRepository bookingRepository,
             CarRepository carRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            PaymentService paymentService,
+            EmailService emailService,
+            EmailTemplateService emailTemplateService) {
 
         this.bookingRepository = bookingRepository;
         this.carRepository = carRepository;
         this.userRepository = userRepository;
+        this.paymentService = paymentService;
+        this.emailService = emailService;
+        this.emailTemplateService = emailTemplateService;
     }
 
     @Transactional
@@ -47,6 +64,7 @@ public class BookingService {
 
         if (request.getStartDate() == null ||
                 request.getEndDate() == null) {
+
             throw new RuntimeException(
                     "Pickup and return dates are required"
             );
@@ -72,10 +90,6 @@ public class BookingService {
                         new RuntimeException("User not found")
                 );
 
-        /*
-         * Lock this car record so two booking requests for this
-         * inventory group cannot simultaneously reserve its last unit.
-         */
         Car car = carRepository
                 .findByIdForUpdate(request.getCarId())
                 .orElseThrow(() ->
@@ -110,7 +124,10 @@ public class BookingService {
         }
 
         int numberOfDays = Math.toIntExact(
-                ChronoUnit.DAYS.between(startDate, endDate)
+                java.time.temporal.ChronoUnit.DAYS.between(
+                        startDate,
+                        endDate
+                )
         );
 
         BigDecimal totalPrice = car.getPricePerDay()
@@ -131,11 +148,6 @@ public class BookingService {
         return convertToResponse(savedBooking);
     }
 
-    /*
-     * Rental intervals are start-inclusive and end-exclusive.
-     * For example, a booking ending on 14 October does not occupy
-     * a unit on 14 October, so another booking can start that day.
-     */
     private int getMaximumConcurrentBookings(
             List<Booking> bookings,
             LocalDate requestedStart,
@@ -144,6 +156,7 @@ public class BookingService {
         Map<LocalDate, Integer> dateChanges = new TreeMap<>();
 
         for (Booking booking : bookings) {
+
             LocalDate effectiveStart = booking.getStartDate()
                     .isAfter(requestedStart)
                     ? booking.getStartDate()
@@ -167,6 +180,7 @@ public class BookingService {
 
         for (Integer change : dateChanges.values()) {
             concurrentBookings += change;
+
             maximumConcurrentBookings = Math.max(
                     maximumConcurrentBookings,
                     concurrentBookings
@@ -214,7 +228,7 @@ public class BookingService {
             Long id,
             String email) {
 
-        Booking booking = bookingRepository.findById(id)
+        Booking booking = bookingRepository.findByIdForUpdate(id)
                 .orElseThrow(() ->
                         new RuntimeException("Booking not found")
                 );
@@ -239,8 +253,102 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
 
-        return convertToResponse(
-                bookingRepository.save(booking)
+        Booking savedBooking = bookingRepository.save(booking);
+
+        // Both actions run only after the cancellation transaction commits.
+        scheduleCancellationEmailAfterCommit(booking);
+        scheduleRefundAfterCommit(id, email);
+
+        return convertToResponse(savedBooking);
+    }
+
+    private void scheduleCancellationEmailAfterCommit(Booking booking) {
+
+        String customerEmail = booking.getUser().getEmail();
+        String customerName = booking.getUser().getName();
+        String bookingId = booking.getId().toString();
+
+        String carName = booking.getCar().getBrand()
+                + " " + booking.getCar().getModel();
+
+        String refundStatus =
+                "If payment was completed, refund processing "
+                        + "will be handled separately.";
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            log.warn(
+                    "Transaction synchronization inactive. "
+                            + "Cancellation email was not scheduled for booking {}",
+                    bookingId
+            );
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+
+                    @Override
+                    public void afterCommit() {
+
+                        try {
+                            String html = emailTemplateService
+                                    .cancellationEmail(
+                                            customerName,
+                                            bookingId,
+                                            carName,
+                                            refundStatus
+                                    );
+
+                            emailService.sendHtmlEmail(
+                                    customerEmail,
+                                    "Booking Cancelled - Car Rental System",
+                                    html
+                            );
+
+                        } catch (Exception exception) {
+                            log.error(
+                                    "Failed to send cancellation email for booking {}",
+                                    bookingId,
+                                    exception
+                            );
+                        }
+                    }
+                }
+        );
+    }
+
+    private void scheduleRefundAfterCommit(
+            Long bookingId,
+            String email) {
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException(
+                    "Transaction synchronization is not active"
+            );
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+
+                    @Override
+                    public void afterCommit() {
+
+                        try {
+                            paymentService.refundForCancellation(
+                                    bookingId,
+                                    email
+                            );
+
+                        } catch (Exception exception) {
+                            log.error(
+                                    "Refund initiation failed for booking {}. "
+                                            + "Reconciliation is required.",
+                                    bookingId,
+                                    exception
+                            );
+                        }
+                    }
+                }
         );
     }
 
