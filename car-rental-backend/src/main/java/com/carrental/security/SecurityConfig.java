@@ -62,8 +62,12 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
+        // Allowed frontend origins
         configuration.setAllowedOrigins(
-                List.of("http://localhost:5173")
+                List.of(
+                        "http://localhost:5173",
+                        "https://car-rental-system-kappa-five.vercel.app"
+                )
         );
 
         configuration.setAllowedMethods(
